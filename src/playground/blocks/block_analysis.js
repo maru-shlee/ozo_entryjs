@@ -1,11 +1,27 @@
+// import _chain from 'lodash/chain';
 import _isNumber from 'lodash/isNumber';
 import DataTable from '../../class/DataTable';
+import { toNumber } from '../../util/common';
 
 module.exports = {
     getBlocks() {
         const getSubMenus = (value) => {
             const { fields = [] } = DataTable.getSource(value) || {};
             return fields.map((label, index) => [label, index + 1]);
+        };
+
+        const getColumnNumber = (str) => {
+            if (/\d/.test(str)) {
+                return -1;
+            }
+            return (
+                // _chain(str)
+                // did not work..
+                _.chain(str)
+                    .toUpper()
+                    .reduce((prev, curr) => prev * 26 + curr.charCodeAt() - 64, 0)
+                    .value()
+            );
         };
 
         return {
@@ -26,7 +42,7 @@ module.exports = {
                 events: {
                     mousedown: [
                         function() {
-                            Entry.do('playgroundClickAddTable');
+                            Entry.playground.dataTable.show();
                         },
                     ],
                 },
@@ -147,7 +163,7 @@ module.exports = {
                         null,
                         {
                             type: 'text',
-                            params: ['1'],
+                            params: ['2'],
                         },
                         null,
                         null,
@@ -185,7 +201,7 @@ module.exports = {
                     const property = script.getStringValue('PROPERTY', script);
                     const table = DataTable.getSource(tableId, sprite);
                     if (property === 'ROW') {
-                        await table.insertRow(number);
+                        await table.insertRow(number - 1);
                     } else {
                         await table.insertCol(number);
                     }
@@ -239,7 +255,7 @@ module.exports = {
                         null,
                         {
                             type: 'text',
-                            params: ['1'],
+                            params: ['2'],
                         },
                         null,
                         null,
@@ -277,7 +293,7 @@ module.exports = {
                     const property = script.getStringValue('PROPERTY', script);
                     const table = DataTable.getSource(tableId, sprite);
                     if (property === 'ROW') {
-                        table.deleteRow(number);
+                        table.deleteRow(number - 1);
                     } else {
                         table.deleteCol(number);
                     }
@@ -330,7 +346,7 @@ module.exports = {
                         null,
                         {
                             type: 'text',
-                            params: ['1'],
+                            params: ['2'],
                         },
                         {
                             type: 'get_table_fields',
@@ -375,15 +391,66 @@ module.exports = {
                 isNotFor: ['analysis'],
                 func(sprite, script) {
                     const tableId = script.getField('MATRIX', script);
-                    const row = script.getNumberValue('NUMBER', script);
-                    const col = script.getNumberValue('FIELD', script);
+                    const row = script.getNumberValue('NUMBER', script) - 1;
+                    const col = DataTable.getColumnIndex(script.getValue('FIELD', script));
                     const value = script.getValue('VALUE', script);
                     const table = DataTable.getSource(tableId, sprite);
-                    if (table.isExist([row])) {
+                    if (table.isExist([row, col])) {
                         table.replaceValue([row, col], value);
-                    } else {
-                        throw new Error('data not exist');
                     }
+                    return script.callReturn();
+                },
+                syntax: {
+                    js: [],
+                    py: [],
+                },
+            },
+            // 테이블 $1의 현재 상태를 저장하기
+            save_current_table: {
+                color: EntryStatic.colorSet.block.default.ANALYSIS,
+                outerLine: EntryStatic.colorSet.block.darken.ANALYSIS,
+                skeleton: 'basic',
+                statements: [],
+                params: [
+                    {
+                        type: 'DropdownDynamic',
+                        value: null,
+                        menuName: 'tables',
+                        dropdownSync: 'dataTables',
+                        fontSize: 10,
+                        bgColor: EntryStatic.colorSet.block.darken.ANALYSIS,
+                        arrowColor: EntryStatic.colorSet.arrow.default.DEFAULT,
+                    },
+                    {
+                        type: 'Indicator',
+                        img: 'block_icon/block_analysis.svg',
+                        size: 11,
+                    },
+                ],
+                events: {},
+                def: {
+                    params: [null, null],
+                    type: 'save_current_table',
+                },
+                pyHelpDef: {
+                    params: [
+                        {
+                            type: 'text',
+                            params: ['D&value'],
+                        },
+                        null,
+                    ],
+                    type: 'save_current_table',
+                },
+                paramsKeyMap: {
+                    MATRIX: 0,
+                },
+                class: 'analysis',
+                isNotFor: ['analysis'],
+                func(sprite, script) {
+                    const tableId = script.getField('MATRIX', script);
+                    const table = DataTable.getSource(tableId);
+                    DataTable.saveTable({ selected: table.dataTable });
                     return script.callReturn();
                 },
                 syntax: {
@@ -420,6 +487,16 @@ module.exports = {
                     },
                 ],
                 events: {},
+                pyHelpDef: {
+                    params: [
+                        {
+                            type: 'text',
+                            params: ['D&value'],
+                        },
+                        null,
+                    ],
+                    type: 'get_table_count',
+                },
                 def: {
                     params: [null, null],
                     type: 'get_table_count',
@@ -436,7 +513,7 @@ module.exports = {
                     const table = DataTable.getSource(tableId, sprite);
                     if (property === 'ROW') {
                         const { array } = table;
-                        return array.length;
+                        return array.length + 1;
                     } else if (property === 'COL') {
                         const labels = table.fields;
                         return labels.length;
@@ -481,7 +558,7 @@ module.exports = {
                         null,
                         {
                             type: 'text',
-                            params: ['1'],
+                            params: ['2'],
                         },
                         {
                             type: 'get_table_fields',
@@ -498,13 +575,66 @@ module.exports = {
                 isNotFor: ['analysis'],
                 func(sprite, script) {
                     const tableId = script.getField('MATRIX', script);
-                    const row = script.getNumberValue('ROW', script);
-                    const col = script.getNumberValue('COL', script);
+                    const row = script.getNumberValue('ROW', script) - 1;
+                    const col = DataTable.getColumnIndex(script.getValue('COL', script));
                     const table = DataTable.getSource(tableId, sprite);
+
                     if (table.isExist([row, col])) {
                         return table.getValue([row, col]);
                     }
-                    throw new Error('data not exist');
+                    return null;
+                },
+                syntax: {
+                    js: [],
+                    py: [],
+                },
+            },
+            get_value_from_last_row: {
+                color: EntryStatic.colorSet.block.default.ANALYSIS,
+                outerLine: EntryStatic.colorSet.block.darken.ANALYSIS,
+                skeleton: 'basic_string_field',
+                statements: [],
+                params: [
+                    {
+                        type: 'DropdownDynamic',
+                        value: null,
+                        menuName: 'tables',
+                        dropdownSync: 'dataTables',
+                        fontSize: 10,
+                        bgColor: EntryStatic.colorSet.block.darken.ANALYSIS,
+                        arrowColor: EntryStatic.colorSet.arrow.default.DEFAULT,
+                    },
+                    {
+                        type: 'Block',
+                        accept: 'string',
+                        defaultType: 'number',
+                    },
+                ],
+                events: {},
+                def: {
+                    params: [
+                        null,
+                        {
+                            type: 'get_table_fields',
+                        },
+                    ],
+                    type: 'get_value_from_last_row',
+                },
+                paramsKeyMap: {
+                    MATRIX: 0,
+                    COL: 1,
+                },
+                class: 'analysis',
+                isNotFor: ['analysis'],
+                func(sprite, script) {
+                    const tableId = script.getField('MATRIX', script);
+                    const col = DataTable.getColumnIndex(script.getValue('COL', script));
+                    const table = DataTable.getSource(tableId, sprite);
+                    const row = table && table.array.length;
+                    if (table.isExist([row, col])) {
+                        return table.getValue([row, col]);
+                    }
+                    return null;
                 },
                 syntax: {
                     js: [],
@@ -540,6 +670,7 @@ module.exports = {
                             [Lang.Blocks.table_min, 'MIN'],
                             [Lang.Blocks.table_avg, 'AVG'],
                             [Lang.Blocks.table_stdev, 'STDEV'],
+                            [Lang.Blocks.table_median, 'MEDIAN'],
                         ],
                         value: 'SUM',
                         fontSize: 10,
@@ -568,11 +699,12 @@ module.exports = {
                 func(sprite, script) {
                     const tableId = script.getField('MATRIX', script);
                     const calc = script.getField('CALC', script);
-                    const col = script.getNumberValue('COL', script);
+                    const col = DataTable.getColumnIndex(script.getValue('COL', script));
                     const table = DataTable.getSource(tableId, sprite);
-                    const array = table.array.map(({ value = [] }) =>
-                        _isNumber(value[col - 1]) ? value[col - 1] : 0
-                    );
+                    const array = table.array.map(({ value = [] }) => {
+                        const parsed = toNumber(value[col - 1]);
+                        return _isNumber(parsed) ? parsed : 0;
+                    });
                     const total = array.length;
                     const sum = (x, y) => x + y;
                     const square = (x) => x * x;
@@ -588,10 +720,16 @@ module.exports = {
                             return array.reduce((x, y) => Math.min(x, y));
                         case 'AVG':
                             return array.reduce(sum) / total;
-                        case 'STDEV':
+                        case 'STDEV': {
                             const avg = array.reduce(sum) / total;
                             const deviations = array.map((x) => x - avg);
                             return Math.sqrt(deviations.map(square).reduce(sum) / (total - 1));
+                        }
+                        case 'MEDIAN': {
+                            const sorted = array.sort((a, b) => a - b);
+                            const n = Math.floor(array.length / 2);
+                            return (sorted[n] + sorted[array.length - 1 - n]) / 2;
+                        }
                         default:
                             return 0;
                     }
@@ -601,7 +739,8 @@ module.exports = {
                     py: [],
                 },
             },
-            open_table_chart: {
+            // 테이블 %1 창 열기
+            open_table: {
                 color: EntryStatic.colorSet.block.default.ANALYSIS,
                 outerLine: EntryStatic.colorSet.block.darken.ANALYSIS,
                 skeleton: 'basic',
@@ -624,14 +763,160 @@ module.exports = {
                 ],
                 events: {},
                 def: {
-                    params: [null, null],
+                    params: [null, null, null],
+                    type: 'open_table',
+                },
+                pyHelpDef: {
+                    params: [
+                        {
+                            type: 'text',
+                            params: ['A&value', 'B&value'],
+                        },
+                        null,
+                    ],
+                    type: 'open_table',
+                },
+                paramsKeyMap: {
+                    MATRIX: 0,
+                    CHART_INDEX: 1,
+                },
+                class: 'analysis',
+                isNotFor: ['analysis'],
+                func(sprite, script) {
+                    const tableId = script.getField('MATRIX', script);
+                    DataTable.showTable(tableId);
+                    return script.callReturn();
+                },
+                syntax: {
+                    js: [],
+                    py: [],
+                },
+            },
+            // 테이블 %1 창을 %2 초 동안 열기
+            open_table_wait: {
+                color: EntryStatic.colorSet.block.default.ANALYSIS,
+                outerLine: EntryStatic.colorSet.block.darken.ANALYSIS,
+                skeleton: 'basic',
+                statements: [],
+                params: [
+                    {
+                        type: 'DropdownDynamic',
+                        value: null,
+                        menuName: 'tables',
+                        dropdownSync: 'dataTables',
+                        fontSize: 10,
+                        bgColor: EntryStatic.colorSet.block.darken.ANALYSIS,
+                        arrowColor: EntryStatic.colorSet.arrow.default.DEFAULT,
+                    },
+                    {
+                        type: 'Block',
+                        accept: 'string',
+                        defaultType: 'number',
+                    },
+                    {
+                        type: 'Indicator',
+                        img: 'block_icon/block_analysis.svg',
+                        size: 11,
+                    },
+                ],
+                events: {},
+                def: {
+                    params: [
+                        null,
+                        {
+                            type: 'number',
+                            params: ['4'],
+                        },
+                        null,
+                    ],
+                    type: 'open_table_wait',
+                },
+                pyHelpDef: {
+                    params: [
+                        {
+                            type: 'text',
+                            params: ['A&value', 'B&value'],
+                        },
+                        {
+                            type: 'number',
+                            params: ['B&value'],
+                        },
+                        null,
+                    ],
+                    type: 'open_table_wait',
+                },
+                paramsKeyMap: {
+                    MATRIX: 0,
+                    SECOND: 1,
+                },
+                class: 'analysis',
+                isNotFor: ['analysis'],
+                func(sprite, script) {
+                    const tableId = script.getField('MATRIX', script);
+                    const timeValue = script.getNumberValue('SECOND', script);
+                    DataTable.showTable(tableId);
+                    setTimeout(() => {
+                        DataTable.closeModal();
+                    }, timeValue * 1000);
+                    return script.callReturn();
+                },
+                syntax: {
+                    js: [],
+                    py: [],
+                },
+            },
+            // 테이블 %1 의 %2 차트 창 열기
+            open_table_chart: {
+                color: EntryStatic.colorSet.block.default.ANALYSIS,
+                outerLine: EntryStatic.colorSet.block.darken.ANALYSIS,
+                skeleton: 'basic',
+                statements: [],
+                params: [
+                    {
+                        type: 'DropdownDynamic',
+                        value: null,
+                        menuName: 'tables',
+                        dropdownSync: 'dataTables',
+                        fontSize: 10,
+                        bgColor: EntryStatic.colorSet.block.darken.ANALYSIS,
+                        arrowColor: EntryStatic.colorSet.arrow.default.DEFAULT,
+                    },
+                    {
+                        type: 'DropdownDynamic',
+                        value: null,
+                        menuName() {
+                            const value = this.getTargetValue('dataTables');
+                            const source = DataTable.getSource(value);
+                            const { chart: charts = [] } = source || {};
+                            return charts.map(({ title }, index) => [title, index]);
+                        },
+                        needDeepCopy: true,
+                        fontSize: 10,
+                        bgColor: EntryStatic.colorSet.block.darken.ANALYSIS,
+                        arrowColor: EntryStatic.colorSet.arrow.default.DEFAULT,
+                        defaultValue: (value, options) => {
+                            if (options.length) {
+                                return options[0][1];
+                            }
+                            return null;
+                        },
+                    },
+                    {
+                        type: 'Indicator',
+                        img: 'block_icon/block_analysis.svg',
+                        size: 11,
+                    },
+                ],
+                events: {},
+                def: {
+                    params: [null, null, null],
                     type: 'open_table_chart',
                 },
                 pyHelpDef: {
                     params: [
                         {
                             type: 'text',
-                            params: ['A&value'],
+                            params: ['A&value', 'B&value'],
                         },
                         null,
                     ],
@@ -639,12 +924,14 @@ module.exports = {
                 },
                 paramsKeyMap: {
                     MATRIX: 0,
+                    CHART_INDEX: 1,
                 },
                 class: 'analysis',
                 isNotFor: ['analysis'],
                 func(sprite, script) {
                     const tableId = script.getField('MATRIX', script);
-                    DataTable.showChart(tableId);
+                    const chartIndex = script.getField('CHART_INDEX', script);
+                    DataTable.showChart(tableId, chartIndex);
                     return script.callReturn();
                 },
                 syntax: {
@@ -677,8 +964,84 @@ module.exports = {
                 class: 'analysis',
                 isNotFor: ['analysis'],
                 func(sprite, script) {
-                    DataTable.closeChart();
+                    DataTable.closeModal();
                     return script.callReturn();
+                },
+                syntax: {
+                    js: [],
+                    py: [],
+                },
+            },
+            get_coefficient: {
+                color: EntryStatic.colorSet.block.default.ANALYSIS,
+                outerLine: EntryStatic.colorSet.block.darken.ANALYSIS,
+                skeleton: 'basic_string_field',
+                statements: [],
+                params: [
+                    {
+                        type: 'DropdownDynamic',
+                        value: null,
+                        menuName: 'tables',
+                        dropdownSync: 'dataTables',
+                        fontSize: 10,
+                        bgColor: EntryStatic.colorSet.block.darken.ANALYSIS,
+                        arrowColor: EntryStatic.colorSet.arrow.default.DEFAULT,
+                    },
+                    {
+                        type: 'Block',
+                        accept: 'string',
+                        defaultType: 'number',
+                    },
+                    {
+                        type: 'Block',
+                        accept: 'string',
+                        defaultType: 'number',
+                    },
+                ],
+                events: {},
+                def: {
+                    params: [
+                        null,
+                        {
+                            type: 'get_table_fields',
+                        },
+                        {
+                            type: 'get_table_fields',
+                        },
+                    ],
+                    type: 'get_coefficient',
+                },
+                pyHelpDef: {
+                    params: [
+                        {
+                            type: 'text',
+                            params: ['A&value'],
+                        },
+                        {
+                            type: 'text',
+                            params: ['B&value'],
+                        },
+                        {
+                            type: 'text',
+                            params: ['C&value'],
+                        },
+                        null,
+                    ],
+                    type: 'get_coefficient',
+                },
+                paramsKeyMap: {
+                    MATRIX: 0,
+                    FIELD1: 1,
+                    FIELD2: 2,
+                },
+                class: 'analysis',
+                isNotFor: ['analysis'],
+                func(sprite, script) {
+                    const tableId = script.getField('MATRIX', script);
+                    const x = DataTable.getColumnIndex(script.getValue('FIELD1', script));
+                    const y = DataTable.getColumnIndex(script.getValue('FIELD2', script));
+                    const table = DataTable.getSource(tableId, sprite);
+                    return table.getCoefficient(x - 1, y - 1);
                 },
                 syntax: {
                     js: [],

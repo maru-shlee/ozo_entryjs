@@ -3,18 +3,17 @@
 function format_str() {
     var s = arguments[0];
     for (var i = 0; i < arguments.length - 1; i++) {
-        var reg = new RegExp("\\{" + i + "\\}", "gm");
+        var reg = new RegExp('\\{' + i + '\\}', 'gm');
         s = s.replace(reg, arguments[i + 1]);
     }
     return s;
 }
 
-function random_str(count)
-{
-    var text = "";
-    var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+function random_str(count) {
+    var text = '';
+    var possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
-    for(var i=0; i <count; i++)
+    for (var i = 0; i < count; i++)
         text += possible.charAt(Math.floor(Math.random() * possible.length));
 
     return text;
@@ -90,7 +89,11 @@ Entry.AsomeBot.setLanguage = function() {
     return {
         ko: {
             template: {
-                asomebot_toggle_led: '파란 LED %1 %2',
+                asomebot_toggle_led: '파란 LED %1 (Zet보드) %2',
+                asomebot_prepare_led: '키고 끄는 LED 준비 %1',
+                asomebot_prepare_duty_led: '밝기 조절 LED 준비 %1',
+                asomebot_led_color: '키고 끄는 %1 LED %2 %3',
+                asomebot_led_duty: '밝기 조절 %1 LED %2 %3',
                 asomebot_get_ultrasonic_value: '초음파 센서 거리 센서값',
 
                 asomebot_buzzer_open: '부저 켜기 %1',
@@ -132,10 +135,17 @@ Entry.AsomeBot.setLanguage = function() {
                 internet_udp_msg: 'UDP 수신값',
                 internet_send_msg: '%1코드로 %2메시지를 전송하기 %3',
             },
+            Menus: {
+                awesomebot: '어썸봇',
+            },
         },
         en: {
             template: {
                 asomebot_toggle_led: 'Blue LED %1 %2',
+                asomebot_prepare_led: 'Prepare On, Off LED %1',
+                asomebot_prepare_duty_led: 'Prepare adjustable in brightness LED %1',
+                asomebot_led_color: '%1 LED %2 %3',
+                asomebot_led_duty: '%1 LED %2 %3',
                 asomebot_get_ultrasonic_value: 'distance',
 
                 asomebot_buzzer_open: 'Buzzer on %1',
@@ -177,12 +187,19 @@ Entry.AsomeBot.setLanguage = function() {
                 internet_udp_msg: 'UDP message',
                 internet_send_msg: 'Send message %2 to %1 %3',
             },
+            Menus: {
+                awesomebot: 'AsomeBot',
+            },
         },
     };
 };
 
 Entry.AsomeBot.blockMenuBlocks = [
     'asomebot_toggle_led',
+    'asomebot_prepare_led',
+    'asomebot_prepare_duty_led',
+    'asomebot_led_color',
+    'asomebot_led_duty',
     'asomebot_get_ultrasonic_value',
 
     'asomebot_buzzer_open',
@@ -217,7 +234,7 @@ Entry.AsomeBot.blockMenuBlocks = [
     'asomebot_swing',
     'asomebot_yaho',
     'asomebot_moonwalk',
- 
+
     'internet_connect',
     'internet_open_ap',
     'internet_open_udp',
@@ -255,7 +272,7 @@ Entry.AsomeBot.getBlocks = function() {
                         type: 'arduino_get_digital_toggle',
                         params: ['on'],
                     },
-                    null
+                    null,
                 ],
                 type: 'asomebot_toggle_led',
             },
@@ -273,17 +290,249 @@ Entry.AsomeBot.getBlocks = function() {
                     sq.msg_id = script.msg_id;
 
                     // 어썸보드 built-in LED가 반대로 연결되어 있음
-                    if (value == "on") {
-                        value = "off";
+                    if (value == 'on') {
+                        value = 'off';
                     } else {
-                        value = "on";
+                        value = 'on';
                     }
 
-                    sq.msg = format_str("OutputPin(4).{0}()", value);
+                    sq.msg = format_str('OutputPin(4).{0}()', value);
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
+                    delete script.is_started;
+                    delete script.msg_id;
+                    return script.callReturn();
+                }
+
+                return script;
+            },
+            syntax: undefined,
+        },
+        asomebot_prepare_led: {
+            template: Lang.template.asomebot_prepare_led,
+            color: EntryStatic.colorSet.block.default.HARDWARE,
+            outerLine: EntryStatic.colorSet.block.darken.HARDWARE,
+            skeleton: 'basic',
+            statements: [],
+            params: [
+                {
+                    type: 'Indicator',
+                    img: 'block_icon/hardware_icon.svg',
+                    size: 12,
+                },
+            ],
+            events: {},
+            def: {
+                params: [null],
+                type: 'asomebot_prepare_led',
+            },
+            class: 'Basic',
+            isNotFor: ['AsomeBot'],
+            func: function(sprite, script) {
+                var sq = Entry.hw.sendQueue;
+                var pd = Entry.hw.portData;
+
+                if (!script.is_started) {
+                    script.is_started = true;
+                    script.msg_id = random_str(16);
+                    sq.msg_id = script.msg_id;
+                    sq.msg = 'import battery;battery.exit();r=OutputPin(15);g=OutputPin(13);';
+                    return script;
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
+                    delete script.is_started;
+                    delete script.msg_id;
+                    return script.callReturn();
+                }
+
+                return script;
+            },
+            syntax: undefined,
+        },
+        asomebot_prepare_duty_led: {
+            template: Lang.template.asomebot_prepare_duty_led,
+            color: EntryStatic.colorSet.block.default.HARDWARE,
+            outerLine: EntryStatic.colorSet.block.darken.HARDWARE,
+            skeleton: 'basic',
+            statements: [],
+            params: [
+                {
+                    type: 'Indicator',
+                    img: 'block_icon/hardware_icon.svg',
+                    size: 12,
+                },
+            ],
+            events: {},
+            def: {
+                params: [null],
+                type: 'asomebot_prepare_duty_led',
+            },
+            class: 'Basic',
+            isNotFor: ['AsomeBot'],
+            func: function(sprite, script) {
+                var sq = Entry.hw.sendQueue;
+                var pd = Entry.hw.portData;
+
+                if (!script.is_started) {
+                    script.is_started = true;
+                    script.msg_id = random_str(16);
+                    sq.msg_id = script.msg_id;
+                    sq.msg = 'import battery;battery.exit();r=ServoPin(15);g=ServoPin(13);';
+                    return script;
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
+                    delete script.is_started;
+                    delete script.msg_id;
+                    return script.callReturn();
+                }
+
+                return script;
+            },
+            syntax: undefined,
+        },
+        asomebot_led_color: {
+            template: Lang.template.asomebot_led_color,
+            color: EntryStatic.colorSet.block.default.HARDWARE,
+            outerLine: EntryStatic.colorSet.block.darken.HARDWARE,
+            skeleton: 'basic',
+            statements: [],
+            params: [
+                {
+                    type: 'Dropdown',
+                    options: [
+                        [ "Red", "r" ],
+                        [ "Green", "g" ],
+                    ],
+                    value: 'r',
+                    fontSize: 11,
+                    bgColor: EntryStatic.colorSet.block.darken.HARDWARE,
+                    arrowColor: EntryStatic.colorSet.arrow.default.HARDWARE,
+                    
+                },
+                {
+                    type: 'Dropdown',
+                    options: [
+                        [ "On", "on" ],
+                        [ "Off", "off" ]
+                    ],
+                    value: 'on', 
+                    fontSize: 11,
+                    bgColor: EntryStatic.colorSet.block.darken.HARDWARE,
+                    arrowColor: EntryStatic.colorSet.arrow.default.HARDWARE,
+                    
+                },
+                {
+                    type: 'Indicator',
+                    img: 'block_icon/hardware_icon.svg',
+                    size: 12,
+                },
+            ],
+            paramsKeyMap: {
+                VALUE1: 0,
+                VALUE2: 1,
+            },
+            events: {},
+            def: {
+                params: [
+                    null, null, null
+                ],
+                type: 'asomebot_led_color',
+            },
+            class: 'Basic',
+            isNotFor: ['AsomeBot'],
+            func: function(sprite, script) {
+                var sq = Entry.hw.sendQueue;
+                var pd = Entry.hw.portData;
+
+                var value1 = script.getStringValue('VALUE1');
+                var value2 = script.getStringValue('VALUE2');
+                    
+                if (!script.is_started) {
+                    script.is_started = true;
+                    script.msg_id = random_str(16);
+                    sq.msg_id = script.msg_id;
+                    sq.msg = format_str('{0}.{1}()', value1,value2);
+                    return script;
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
+                    delete script.is_started;
+                    delete script.msg_id;
+                    return script.callReturn();
+                }
+
+                return script;
+            },
+            syntax: undefined,
+        },
+        asomebot_led_duty: {
+            template: Lang.template.asomebot_led_duty,
+            color: EntryStatic.colorSet.block.default.HARDWARE,
+            outerLine: EntryStatic.colorSet.block.darken.HARDWARE,
+            skeleton: 'basic',
+            statements: [],
+            params: [
+                {
+                    type: 'Dropdown',
+                    options: [
+                        [ "Red", "r" ],
+                        [ "Green", "g" ],
+                    ],
+                    value: 'r',
+                    fontSize: 11,
+                    bgColor: EntryStatic.colorSet.block.darken.HARDWARE,
+                    arrowColor: EntryStatic.colorSet.arrow.default.HARDWARE,
+                    
+                },
+                {
+                    type: 'Block',
+                    accept: 'string',
+                    defaultType: 'number',
+                },
+                {
+                    type: 'Indicator',
+                    img: 'block_icon/hardware_icon.svg',
+                    size: 12,
+                },
+            ],
+            paramsKeyMap: {
+                VALUE1: 0,
+                VALUE2: 1,
+            },
+            events: {},
+            def: {
+                params: [
+                    null,
+                    {
+                        type: 'number',
+                        params: [298],
+                    },
+                    null,
+                ],
+                type: 'asomebot_led_duty',
+            },
+            class: 'Basic',
+            isNotFor: ['AsomeBot'],
+            func: function(sprite, script) {
+                var sq = Entry.hw.sendQueue;
+                var pd = Entry.hw.portData;
+
+                var value1 = script.getStringValue('VALUE1');
+                var value2 = script.getNumberValue('VALUE2');
+                    
+                if (!script.is_started) {
+                    script.is_started = true;
+                    script.msg_id = random_str(16);
+                    sq.msg_id = script.msg_id;
+                    sq.msg = format_str('{0}.duty({1})', value1,value2);
+                    return script;
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -323,7 +572,7 @@ Entry.AsomeBot.getBlocks = function() {
                 }
                 var tick = new Date().getTime();
 
-                if ((tick - sprite.old_tick) > 500) {
+                if (tick - sprite.old_tick > 500) {
                     sq.msg_id = random_str(16);
                     sq.msg = "print('#' + 'DT ' + str(hcsr04.get_distance()) + '  ###')";
                     sprite.old_tick = tick;
@@ -333,7 +582,7 @@ Entry.AsomeBot.getBlocks = function() {
             },
             syntax: undefined,
         },
-        
+
         // Buzzer
         asomebot_buzzer_open: {
             template: Lang.template.asomebot_buzzer_open,
@@ -363,11 +612,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = "turnoff_pins( (1, 5, 6, 7, 8) ); import music; music.open(1)"
+                    sq.msg = 'turnoff_pins( (1, 5, 6, 7, 8) ); import music; music.open(1)';
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -414,7 +663,7 @@ Entry.AsomeBot.getBlocks = function() {
                         type: 'text',
                         params: ['0.3'],
                     },
-                    null
+                    null,
                 ],
                 type: 'asomebot_buzzer_note',
             },
@@ -425,7 +674,7 @@ Entry.AsomeBot.getBlocks = function() {
                 var pd = Entry.hw.portData;
 
                 var value1 = script.getValue('VALUE1');
-                var value2 = parseInt( parseFloat(script.getValue('VALUE2')) * 1000 );
+                var value2 = parseInt(parseFloat(script.getValue('VALUE2')) * 1000);
 
                 if (!script.is_started) {
                     script.is_started = true;
@@ -433,9 +682,9 @@ Entry.AsomeBot.getBlocks = function() {
                     sq.msg_id = script.msg_id;
                     sq.msg = format_str("music.note('{0}', {1})", value1, String(value2));
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -483,7 +732,7 @@ Entry.AsomeBot.getBlocks = function() {
                         type: 'text',
                         params: ['0.3'],
                     },
-                    null
+                    null,
                 ],
                 type: 'asomebot_buzzer_tone',
             },
@@ -494,17 +743,17 @@ Entry.AsomeBot.getBlocks = function() {
                 var pd = Entry.hw.portData;
 
                 var value1 = script.getValue('VALUE1');
-                var value2 = parseInt( parseFloat(script.getValue('VALUE2')) * 1000 );
+                var value2 = parseInt(parseFloat(script.getValue('VALUE2')) * 1000);
 
                 if (!script.is_started) {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("music.tone({0}, {1})", value1, String(value2));
+                    sq.msg = format_str('music.tone({0}, {1})', value1, String(value2));
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -542,11 +791,12 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = "turnoff_pins( (1, 5, 6, 7, 8) ); import asomebot; asomebot.ready(5, 6, 7,8)"
+                    sq.msg =
+                        'turnoff_pins( (1, 5, 6, 7, 8) ); import asomebot; asomebot.ready(5, 6, 7,8)';
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -616,7 +866,7 @@ Entry.AsomeBot.getBlocks = function() {
                         type: 'text',
                         params: ['90'],
                     },
-                    null
+                    null,
                 ],
                 type: 'asomebot_align',
             },
@@ -635,11 +885,17 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.align({0}, {1}, {2}, {3})", value1, value2, value3, value4);
+                    sq.msg = format_str(
+                        'asomebot.align({0}, {1}, {2}, {3})',
+                        value1,
+                        value2,
+                        value3,
+                        value4
+                    );
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -677,11 +933,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.home()");
+                    sq.msg = format_str('asomebot.home()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -739,7 +995,7 @@ Entry.AsomeBot.getBlocks = function() {
                         type: 'text',
                         params: ['0.5'],
                     },
-                    null
+                    null,
                 ],
                 type: 'asomebot_angle',
             },
@@ -751,17 +1007,22 @@ Entry.AsomeBot.getBlocks = function() {
 
                 var value1 = script.getValue('VALUE1');
                 var value2 = script.getValue('VALUE2');
-                var value3 = parseInt( parseFloat(script.getValue('VALUE3')) * 1000 );
+                var value3 = parseInt(parseFloat(script.getValue('VALUE3')) * 1000);
 
                 if (!script.is_started) {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.angles( [{0}], [{1}], {2})", value1, value2, String(value3));
+                    sq.msg = format_str(
+                        'asomebot.angles( [{0}], [{1}], {2})',
+                        value1,
+                        value2,
+                        String(value3)
+                    );
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -799,11 +1060,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.forward()");
+                    sq.msg = format_str('asomebot.forward()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -841,11 +1102,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.backward()");
+                    sq.msg = format_str('asomebot.backward()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -883,11 +1144,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.turn_left()");
+                    sq.msg = format_str('asomebot.turn_left()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -925,11 +1186,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.turn_right()");
+                    sq.msg = format_str('asomebot.turn_right()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -977,7 +1238,7 @@ Entry.AsomeBot.getBlocks = function() {
                         type: 'text',
                         params: ['300'],
                     },
-                    null
+                    null,
                 ],
                 type: 'asomebot_forward2',
             },
@@ -994,11 +1255,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.forward(s1={0}, s2={1})", value1, value2);
+                    sq.msg = format_str('asomebot.forward(s1={0}, s2={1})', value1, value2);
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1046,7 +1307,7 @@ Entry.AsomeBot.getBlocks = function() {
                         type: 'text',
                         params: ['300'],
                     },
-                    null
+                    null,
                 ],
                 type: 'asomebot_backward2',
             },
@@ -1063,11 +1324,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.backward(s1={0}, s2={1})", value1, value2);
+                    sq.msg = format_str('asomebot.backward(s1={0}, s2={1})', value1, value2);
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1105,7 +1366,7 @@ Entry.AsomeBot.getBlocks = function() {
                         type: 'text',
                         params: ['300'],
                     },
-                    null
+                    null,
                 ],
                 type: 'asomebot_turn_left2',
             },
@@ -1121,11 +1382,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.turn_left(s={0})", value1);
+                    sq.msg = format_str('asomebot.turn_left(s={0})', value1);
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1163,7 +1424,7 @@ Entry.AsomeBot.getBlocks = function() {
                         type: 'text',
                         params: ['300'],
                     },
-                    null
+                    null,
                 ],
                 type: 'asomebot_turn_right2',
             },
@@ -1179,11 +1440,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.turn_right(s={0})", value1);
+                    sq.msg = format_str('asomebot.turn_right(s={0})', value1);
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1205,8 +1466,8 @@ Entry.AsomeBot.getBlocks = function() {
                 {
                     type: 'Dropdown',
                     options: [
-                        [ '왼쪽',    '1'],
-                        [ '오른쪽', '-1'],
+                        ['Left', '1'],
+                        ['Right', '-1'],
                     ],
                     value: '1',
                     fontSize: 11,
@@ -1239,11 +1500,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.mouse({0})", value);
+                    sq.msg = format_str('asomebot.mouse({0})', value);
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1281,11 +1542,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.flap()");
+                    sq.msg = format_str('asomebot.flap()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1323,11 +1584,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.warigari()");
+                    sq.msg = format_str('asomebot.warigari()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1347,8 +1608,8 @@ Entry.AsomeBot.getBlocks = function() {
                 {
                     type: 'Dropdown',
                     options: [
-                        [ '왼쪽',    '1'],
-                        [ '오른쪽', '-1'],
+                        ['Left', '1'],
+                        ['Right', '-1'],
                     ],
                     value: '1',
                     fontSize: 11,
@@ -1381,11 +1642,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.tock({0})", value);
+                    sq.msg = format_str('asomebot.tock({0})', value);
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1423,11 +1684,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.tick_tock()");
+                    sq.msg = format_str('asomebot.tick_tock()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1465,11 +1726,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.wiggle()");
+                    sq.msg = format_str('asomebot.wiggle()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1507,11 +1768,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.swing()");
+                    sq.msg = format_str('asomebot.swing()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1549,11 +1810,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.ballet()");
+                    sq.msg = format_str('asomebot.ballet()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1591,11 +1852,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.yaho()");
+                    sq.msg = format_str('asomebot.yaho()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1615,8 +1876,8 @@ Entry.AsomeBot.getBlocks = function() {
                 {
                     type: 'Dropdown',
                     options: [
-                        [ '왼쪽',    '1'],
-                        [ '오른쪽', '-1'],
+                        ['Left', '1'],
+                        ['Right', '-1'],
                     ],
                     value: '1',
                     fontSize: 11,
@@ -1650,14 +1911,14 @@ Entry.AsomeBot.getBlocks = function() {
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
                     if (value == '1') {
-                        sq.msg = format_str("asomebot.left_swing()");
+                        sq.msg = format_str('asomebot.left_swing()');
                     } else {
-                        sq.msg = format_str("asomebot.right_swing()");
+                        sq.msg = format_str('asomebot.right_swing()');
                     }
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1695,11 +1956,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("asomebot.moonwalk()");
+                    sq.msg = format_str('asomebot.moonwalk()');
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1747,7 +2008,7 @@ Entry.AsomeBot.getBlocks = function() {
                         type: 'text',
                         params: ['Password'],
                     },
-                    null
+                    null,
                 ],
                 type: 'internet_connect',
             },
@@ -1764,11 +2025,15 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("import internet; internet.connect('{0}', '{1}')", value1, value2);
+                    sq.msg = format_str(
+                        "import internet; internet.connect('{0}', '{1}')",
+                        value1,
+                        value2
+                    );
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1805,7 +2070,7 @@ Entry.AsomeBot.getBlocks = function() {
                         type: 'text',
                         params: ['SSID'],
                     },
-                    null
+                    null,
                 ],
                 type: 'internet_open_ap',
             },
@@ -1823,9 +2088,9 @@ Entry.AsomeBot.getBlocks = function() {
                     sq.msg_id = script.msg_id;
                     sq.msg = format_str("import internet; internet.open_ap('{0}')", value);
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1863,7 +2128,7 @@ Entry.AsomeBot.getBlocks = function() {
                         defaultType: 'number',
                         params: ['1234'],
                     },
-                    null
+                    null,
                 ],
                 type: 'internet_open_udp',
             },
@@ -1879,11 +2144,11 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("import udp_socket; udp_socket.open({0})", value);
+                    sq.msg = format_str('import udp_socket; udp_socket.open({0})', value);
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
@@ -1919,14 +2184,14 @@ Entry.AsomeBot.getBlocks = function() {
                 var pd = Entry.hw.portData;
 
                 if (!sprite.old_tick) {
-                    sprite.old_id = "";
+                    sprite.old_id = '';
                     sprite.old_tick = new Date().getTime() - 1000;
                 }
                 var tick = new Date().getTime();
 
-                if ((tick - sprite.old_tick) > 300) {
+                if (tick - sprite.old_tick > 300) {
                     sq.msg_id = random_str(16);
-                    sq.msg = "udp_socket.read_text()";
+                    sq.msg = 'udp_socket.read_text()';
                     sprite.old_tick = tick;
                 }
 
@@ -1975,7 +2240,7 @@ Entry.AsomeBot.getBlocks = function() {
                         type: 'text',
                         params: ['Message'],
                     },
-                    null
+                    null,
                 ],
                 type: 'internet_send_msg',
             },
@@ -1992,11 +2257,15 @@ Entry.AsomeBot.getBlocks = function() {
                     script.is_started = true;
                     script.msg_id = random_str(16);
                     sq.msg_id = script.msg_id;
-                    sq.msg = format_str("import internet; internet.send_msg('{0}', '{1}')", value1, value2);
+                    sq.msg = format_str(
+                        "import internet; internet.send_msg('{0}', '{1}')",
+                        value1,
+                        value2
+                    );
                     return script;
-                } 
-                
-                if ((pd.msg_id) && (pd.msg_id.indexOf(script.msg_id) >= 0)) {
+                }
+
+                if (pd.msg_id && pd.msg_id.indexOf(script.msg_id) >= 0) {
                     delete script.is_started;
                     delete script.msg_id;
                     return script.callReturn();
